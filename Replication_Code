@@ -1,0 +1,237 @@
+require(ggplot2)
+require(cowplot)
+require(easyGgplot2)
+require(grid)
+# source("RDPlot.R")
+
+data=read.csv("NativeAmericanTribes.csv")
+
+library(rdrobust)
+rdrobust(data$medhhinc,data$Z)
+
+rdrobust(data[is.na(data$Z)==FALSE,]$perc_unempl_cou,data[is.na(data$Z)==FALSE,]$Z)
+
+data$Z[data$geo_name=="Stewart Community"]=NA
+
+data$Z[data$geo_name=="Yavapai-Prescott Reservation"]=NA
+
+
+data$IRA=c(
+0,0,0,1,0,0,1,0,1,1,
+0,0,0,1,0,0,0,0,0,0,
+1,0,0,0,0,0,1,0,0,0,
+0,0,0,0,0,1,0,1,1,1,
+1,1,1,0,0,1,1,0,0,1,
+1,0,0,0,1,1,0,1,0,0,
+0,1,1,0,1,0,1,1,0,0,
+0,1,0,0,0,0,1,0,1,0,
+1,1,0,0,0,1,0,0,0,0,
+1,0,0,0,0,0,1,1,0,1,
+0,0,0,0,0,0,1,0,0,0,
+0,1,0,0,1,1,1,0,1,0,
+1,0,1,1,1,0,0,0,1,0,
+0,0,0,0,0,1,0,0,1,0,
+1,0,0,0,0,0,0,0,0,0,
+0,0,0,0,1,0,0,1,0,0,
+0,1,1,1,0,0,1,0,0,0,
+0,0,1,1,0,1,0,0,0,0,0)
+
+
+# bw=rdbwselect(data[is.na(data$Z)==FALSE,]$medhhinc,data[is.na(data$Z)==FALSE,]$Z)[[3]][[1]]
+
+data=data[which(is.na(data$Z)==F),]
+
+data$Status="IRA"
+data$Status[data$IRA==0]="Non-IRA"
+
+data$Status=factor(data$Status, levels=c("Non-IRA","IRA"))
+
+Economic_Outcomes=c("Median Income", "log(Per Capita Income)","Median Income", "log(Per Capita Income)")
+
+Status=c(rep("IRA",2),rep("Non-IRA",2))
+
+
+
+dat=data.frame(cbind(Economic_Outcomes, Status))
+
+dat$Means=c(with(data[data$IRA==1,], c(mean(medhhinc),mean(logpcinc))),with(data[data$IRA==0,], c(mean(medhhinc),mean(logpcinc))))
+
+dat$SE=c(with(data[data$IRA==1,], c(sd(medhhinc),sd(logpcinc))/sqrt(nrow(data[data$IRA==1,]))), with(data[data$IRA==0,], c(sd(medhhinc),sd(logpcinc))/sqrt(nrow(data[data$IRA==0,]))))
+
+
+dodge <- position_dodge(width = 0.9)
+
+plot1=ggplot(dat[c(1,3),], aes(x = Status, y = Means, fill=Status)) +
+  geom_bar(stat = "identity", position = position_dodge()) + theme(legend.position="none") +
+  geom_errorbar(aes(ymax = Means + 1.96*SE, ymin = Means - 1.96*SE), position = dodge, width = 0.2) + ggtitle("Median Income")+ xlab("") + 
+  ylab("Median Income")+scale_y_continuous(breaks=seq(0,40000,by=10000),labels=c("$0","$10,000","$20,000","$30,000","$40,000"),limits=c(0,40000))
+
+plot2=ggplot(dat[c(2,4),], aes(x = Status, y = Means, fill=Status)) +
+  geom_bar(stat = "identity", position = position_dodge()) + theme(legend.position="none") +
+  geom_errorbar(aes(ymax = Means + 1.96*SE, ymin = Means - 1.96*SE), position = dodge, width = 0.2) + ggtitle("log(Per Capita Income)")+ xlab("") + 
+  ylab("log(Per Capita Income)")+coord_cartesian(ylim = c(8.5, 9.5)) 
+
+plot3=ggplot2.histogram(data=data,xName="medhhinc",groupName="Status",alpha=0.5,origin=-1,binwidth=6000,brewerPalette="Paired",groupColors=c('#00BFC4','#F8766D'))+xlab("Median Income")+ylab("Count")+scale_x_continuous(breaks=seq(0,120000,by=40000),labels=c("$0","$40,000","$80,000","$120,000"),limits=c(0,120000))+theme(legend.position="none")
+
+plot4=ggplot2.histogram(data=data,xName="logpcinc",groupName="Status",alpha=0.5,origin=-1,binwidth=0.15,brewerPalette="Paired",groupColors=c('#00BFC4','#F8766D'))+xlab("log(Per Capita Income)")+ylab("Count")+scale_x_continuous(breaks=8:11,labels=8:11,limits=c(8,11))+theme(legend.position="none")
+
+plot_grid(plot1,plot2,nrow=1)
+
+ggsave("TribesBarGraphs.pdf",height=6,width=8)
+
+t.test(medhhinc~IRA,data)
+
+t.test(logpcinc~IRA,data)
+
+
+summary(lm(medhhinc~IRA+orgd+resource.dummy+Agriculture+Sedentarianism+Complexity+Wealth.Distinctions,data))
+summary(lm(pcinc~IRA+orgd+resource.dummy+Agriculture+Sedentarianism+Complexity+Wealth.Distinctions,data))
+summary(lm(perc_unempl_cou~IRA+orgd+resource.dummy+Agriculture+Sedentarianism+Complexity+Wealth.Distinctions,data))
+summary(lm(perc_unempl_cou~IRA+orgd+resource.dummy+Agriculture+Sedentarianism+Complexity+Wealth.Distinctions,data))
+
+
+
+outcomes=c("medhhinc","logpcinc")
+
+standardized_results=matrix(NA,nrow=12,ncol=4)
+
+for(i in 1:2){
+output=summary(lm(data[,outcomes[i]]~IRA,data))$coefficients
+standardized_results[(i+1+5*(i-1)),]=c(output[2,1],sd(data[,outcomes[i]]),output[2,1]/sd(data[,outcomes[i]]),output[2,2]/sd(data[,outcomes[i]]))
+
+output=summary(lm(data[,outcomes[i]]~IRA+Agriculture+Sedentarianism+Complexity+Wealth.Distinctions,data))$coefficients
+standardized_results[(i+2+5*(i-1)),]=c(output[2,1],sd(data[,outcomes[i]]),output[2,1]/sd(data[,outcomes[i]]),output[2,2]/sd(data[,outcomes[i]]))
+
+output=summary(lm(data[,outcomes[i]]~IRA+resarea_sqkm+dist_city+landqual+resource.dummy,data))$coefficients
+standardized_results[(i+3+5*(i-1)),]=c(output[2,1],sd(data[,outcomes[i]]),output[2,1]/sd(data[,outcomes[i]]),output[2,2]/sd(data[,outcomes[i]]))
+
+output=summary(lm(data[,outcomes[i]]~IRA+pcinc_cou+perc_poor_cou,data))$coefficients
+standardized_results[(i+4+5*(i-1)),]=c(output[2,1],sd(data[,outcomes[i]]),output[2,1]/sd(data[,outcomes[i]]),output[2,2]/sd(data[,outcomes[i]]))
+
+output=summary(lm(data[,outcomes[i]]~IRA+Agriculture+Sedentarianism+Complexity+Wealth.Distinctions+resarea_sqkm+dist_city+landqual+resource.dummy+pcinc_cou+perc_poor_cou,data))$coefficients
+standardized_results[(i+5+5*(i-1)),]=c(output[2,1],sd(data[,outcomes[i]]),output[2,1]/sd(data[,outcomes[i]]),output[2,2]/sd(data[,outcomes[i]]))
+
+}
+
+
+
+
+
+
+
+
+
+
+
+cd <- as.data.frame(matrix(NA,12,6))
+conditions <- c("Median Income (no controls)", "log(Per Capita Income) (no controls)","Median Income (tribe-level controls)", "log(Per Capita Income) (tribe-level controls)","Median Income (reservation-level controls)", "log(Per Capita Income) (reservation-level controls)","Median Income (county-level controls)", "log(Per Capita Income) (county-level controls)","Median Income (all controls)", "log(Per Capita Income) (all controls)") 
+conditions <- c("", "No Contorls","Tribe-Level Controls","Reservation-Level Controls","County-Level Controls","All Controls"," "," No Contorls"," Tribe-Level Controls"," Reservation-Level Controls"," County-Level Controls"," All Controls")
+
+#conditions <- c("Disputes Initiated\n(per year)      ","High-Level Disputes\nInitiated (per year)","All Disputes\n(per year)  ","All High-Level Disputes\n(per year)          ") # ,"Revisionist Disputes","High-Level Revisionist Disputes"
+names(cd) <- c("mean","upper","lower","ord","measure")
+cd$mean <- standardized_results[,3]
+cd$lower <- standardized_results[,3]-standardized_results[,4]*1.96
+cd$upper <- standardized_results[,3]+standardized_results[,4]*1.96
+
+cd$ord <- c(12:1)
+cd$measure <- factor(conditions, levels=conditions[order(cd$ord)])
+# make the graph
+library(ggplot2)
+
+pdf("TribeCoefPlot.pdf",height=3.5,width=8)
+
+ggplot(cd, 
+            aes(x=mean,y=measure,color=measure))+geom_vline(xintercept=0, linetype="longdash")+
+
+  geom_errorbarh(aes(xmax =  upper, 
+                     xmin = lower),
+                 size=1.5, height=0)+
+  geom_point(stat="identity",size=4,fill="white")+ 
+  xlab("Estimated Treatment Effect (Standardized)")+ylab(" ")  + theme(legend.position="none",axis.text.x=element_text(size=7.7),axis.text.y=element_text(size=10.7),axis.title=element_text(size=12.5),plot.title = element_text(lineheight=1.8,size=rel(1.5),face="bold"))+ scale_x_continuous(limits=c(-1.25,1.25),breaks=c(-1.2,-1,-0.8,-0.5,-0.2,0,0.2,0.5,0.8,1,1.2),labels=c("-1.2\nvery large","-1","-0.8\nlarge","-0.5\nmedium","-0.2\nsmall","0","0.2\nsmall","0.5\nmedium","0.8\nlarge","1","1.2\nvery large")) +  geom_vline(xintercept=c(-1.2,-0.8,-0.5,-0.2,0.2,0.5,0.8,1.2),linetype=rep("dashed",8), colour=c("turquoise4","turquoise3","turquoise2","turquoise1","turquoise1","turquoise2","turquoise3","turquoise4"))+
+  scale_color_manual(name="",
+                     values=c("dodgerblue4","dodgerblue4","dodgerblue4","dodgerblue4","dodgerblue4","dodgerblue4","dodgerblue","dodgerblue","dodgerblue","dodgerblue","dodgerblue","dodgerblue")) 
+
+grid.text("Median Income", x = unit(0.17, "npc"), y = unit(0.94, "npc"),gp = gpar(fontface = "bold"))
+grid.text("log(Per Capita Income)", x = unit(0.16, "npc"), y = unit(0.553, "npc"),gp = gpar(fontface = "bold"))
+
+dev.off()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+pdf("TribeRDPlots.pdf",height=4, width=10)
+
+op=par(mfrow=c(1,2),mar=c(5.1,7,3,2.1))
+
+RDPlot(data[is.na(data$Z)==FALSE,]$Z,data[is.na(data$Z)==FALSE,]$medhhinc,ylab="Median Income\n \n",xlab="Vote Share From Cut-point",Plot.Raw.Data=TRUE,Plot.Means=FALSE,Raw.Data.Colors = c("blue", "red"),NBoots=100,Plot.p.value=F,Bandwidth=0.1,Smoother="None",Tick.Marks=seq(-0.5,0.5,0.1),Labels=c("-50%","-40%","-30%","-20%","-10%","0%","10%","20%","30%","40%","50%"),Main="",Y.Ticks="None",ylim=c(0,120000))
+
+points(data[data$IRA==0&is.na(data$Z)==FALSE,]$Z,data[data$IRA==0&is.na(data$Z)==FALSE,]$medhhinc,col="#00BFC4",pch=16)
+points(data[data$IRA==1&is.na(data$Z)==FALSE,]$Z,data[data$IRA==1&is.na(data$Z)==FALSE,]$medhhinc,col="#F8766D",pch=16)
+
+axis(2, at = seq(0,120000,40000), labels = c("$0","$40,000","$80,000","$120,000"),las=2)
+
+title("Median Income", line = 0.8)
+
+RDPlot(data[is.na(data$Z)==FALSE,]$Z,data[is.na(data$Z)==FALSE,]$logpcinc,ylab="log(Per Capita Income)",xlab="Vote Share From Cut-point",Plot.Raw.Data=TRUE,Plot.Means=FALSE,Raw.Data.Colors = c("blue", "red"),NBoots=100,Plot.p.value=F,Bandwidth=0.1,Smoother="None",Tick.Marks=seq(-0.5,0.5,0.1),Labels=c("-50%","-40%","-30%","-20%","-10%","0%","10%","20%","30%","40%","50%"),Main="",Y.Ticks="None")
+
+points(data[data$IRA==0&is.na(data$Z)==FALSE,]$Z,data[data$IRA==0&is.na(data$Z)==FALSE,]$logpcinc,col="#00BFC4",pch=16)
+points(data[data$IRA==1&is.na(data$Z)==FALSE,]$Z,data[data$IRA==1&is.na(data$Z)==FALSE,]$logpcinc,col="#F8766D",pch=16)
+
+axis(2, at = seq(8.5,10.5,0.5), seq(8.5,10.5,0.5),las=2)
+
+title("log(Per Capita Income)", line = 0.8)
+
+dev.off()
+
+
+
+
+
+sd(data$medhhinc)
+
+10000/sd(data$medhhinc)
+
+new_data=data
+new_data$medhhinc[new_data$IRA==1]=new_data$medhhinc[new_data$IRA==1]-1000
+
+bottom_half=new_data[new_data$medhhinc<median(new_data$medhhinc),]
+top_half=new_data[new_data$medhhinc>=median(new_data$medhhinc),]
+
+sum(bottom_half$IRA==1)/nrow(bottom_half)
+sum(top_half$IRA==1)/nrow(top_half)
+
+
+(sum(bottom_half$IRA==1)/nrow(bottom_half))/(sum(top_half$IRA==1)/nrow(top_half))
+
+100*((sum(bottom_half$IRA==1)/nrow(bottom_half))/(sum(top_half$IRA==1)/nrow(top_half))-1)
+
+
+
+0.07*sd(data$logpcinc)
+
+
+new_data=data
+new_data$logpcinc[new_data$IRA==1]=new_data$logpcinc[new_data$IRA==1]-0.02688302
+
+bottom_half=new_data[new_data$logpcinc<median(new_data$logpcinc),]
+top_half=new_data[new_data$logpcinc>=median(new_data$logpcinc),]
+
+sum(bottom_half$IRA==1)/nrow(bottom_half)
+sum(top_half$IRA==1)/nrow(top_half)
+
+
+(sum(bottom_half$IRA==1)/nrow(bottom_half))/(sum(top_half$IRA==1)/nrow(top_half))
+
+100*((sum(bottom_half$IRA==1)/nrow(bottom_half))/(sum(top_half$IRA==1)/nrow(top_half))-1)
+
+
